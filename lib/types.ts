@@ -29,6 +29,10 @@ export interface GameState {
   guessedCountries: Record<string, GuessedCountry>;
   lastGuessedCountryIso?: string;
   timerRemaining?: number;
+  /** Set when game starts; when defined, timer is enabled for this round. */
+  timerSeconds?: number;
+  strikesEnabled?: boolean;
+  maxStrikes?: number;
   historyLog?: HistoryLogEntry[];
 }
 

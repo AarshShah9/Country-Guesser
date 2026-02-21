@@ -1,10 +1,15 @@
 import type {
-  GamePhase,
   GameSettings,
   GameState,
   GuessedCountry,
   Player,
 } from "./types";
+import {
+  canStartGame,
+  ensurePlayerIds,
+  nextPlayerIndex,
+  countRemainingPlayers,
+} from "./gameLogic";
 
 // --- Initial state ---
 
@@ -43,48 +48,143 @@ export type GameAction =
   | { type: "NEW_GAME"; payload?: { settings?: GameSettings } }
   | { type: "REHYDRATE"; payload: { state: GameState } };
 
+// --- Helpers ---
+
+function withStrike(
+  state: GameState,
+  playerId: string
+): { nextState: GameState; eliminated: boolean; gameOver: boolean } {
+  const { strikesEnabled, maxStrikes = 0 } = state;
+  const players = state.players.map((p) => {
+    if (p.id !== playerId) return p;
+    const nextStrikes = p.strikes + 1;
+    const eliminated = Boolean(strikesEnabled && nextStrikes >= maxStrikes);
+    return { ...p, strikes: nextStrikes, eliminated };
+  });
+  const eliminated = players.find((p) => p.id === playerId)?.eliminated ?? false;
+  const remaining = countRemainingPlayers(players);
+  const gameOver = remaining <= 1;
+  const nextState: GameState = {
+    ...state,
+    players,
+    phase: gameOver ? "finished" : state.phase,
+  };
+  return { nextState, eliminated, gameOver };
+}
+
+function advanceTurnState(state: GameState): GameState {
+  if (state.phase !== "active") return state;
+  const nextIndex = nextPlayerIndex(state);
+  if (nextIndex < 0) return state;
+  const next: GameState = {
+    ...state,
+    currentPlayerIndex: nextIndex,
+  };
+  if (state.timerSeconds != null) {
+    next.timerRemaining = state.timerSeconds;
+  }
+  return next;
+}
+
 // --- Reducer ---
 
 export function gameReducer(state: GameState, action: GameAction): GameState {
   switch (action.type) {
     case "START_GAME": {
-      // TODO: Build initial state from settings + players, set phase to "active", start timer if enabled
-      return state;
+      const { settings, players: rawPlayers } = action.payload;
+      const trimmed = rawPlayers
+        .filter((p) => typeof p.name === "string" && p.name.trim() !== "")
+        .map((p) => ({ ...p, name: p.name.trim(), strikes: 0, eliminated: false }));
+      if (!canStartGame(trimmed)) return state;
+      const players = ensurePlayerIds(trimmed);
+      const next: GameState = {
+        phase: "active",
+        players,
+        currentPlayerIndex: 0,
+        guessedCountries: {},
+        timerSeconds: settings.timerEnabled ? settings.timerSeconds : undefined,
+        timerRemaining: settings.timerEnabled ? settings.timerSeconds : undefined,
+        strikesEnabled: settings.strikesEnabled,
+        maxStrikes: settings.maxStrikes,
+      };
+      return next;
     }
+
     case "SUBMIT_GUESS": {
-      // TODO: Add to guessedCountries, set lastGuessedCountryIso, optionally advance turn
+      // Country validation done elsewhere; just return state for now.
       return state;
     }
+
     case "APPLY_STRIKE": {
-      // TODO: Increment strikes for current (or payload) player; if at max, eliminate
-      return state;
+      if (state.phase !== "active") return state;
+      const playerId = action.payload?.playerId ?? state.players[state.currentPlayerIndex]?.id;
+      if (!playerId) return state;
+      const { nextState } = withStrike(state, playerId);
+      return nextState;
     }
+
     case "ELIMINATE": {
-      // TODO: Mark player eliminated, advance turn if needed
-      return state;
+      const { playerId } = action.payload;
+      const players = state.players.map((p) =>
+        p.id === playerId ? { ...p, eliminated: true } : p
+      );
+      const remaining = countRemainingPlayers(players);
+      const next: GameState = {
+        ...state,
+        players,
+        phase: remaining <= 1 ? "finished" : state.phase,
+      };
+      return advanceTurnState(next);
     }
+
     case "ADVANCE_TURN": {
-      // TODO: Move currentPlayerIndex to next non-eliminated player; check game over
-      return state;
+      return advanceTurnState(state);
     }
+
     case "TIMER_TICK": {
-      // TODO: Decrement timerRemaining; if 0, treat as timeout
-      return state;
+      if (state.phase !== "active" || state.timerRemaining == null) return state;
+      const nextRemaining = Math.max(0, state.timerRemaining - 1);
+      return { ...state, timerRemaining: nextRemaining };
     }
+
     case "TIMER_TIMEOUT": {
-      // TODO: Apply strike or skip turn per settings, advance turn
-      return state;
+      if (state.phase !== "active") return state;
+      const current = state.players[state.currentPlayerIndex];
+      if (!current) return state;
+      if (state.strikesEnabled) {
+        const { nextState } = withStrike(state, current.id);
+        return advanceTurnState(nextState);
+      }
+      return advanceTurnState(state);
     }
+
     case "RESET": {
       return getInitialState();
     }
+
     case "NEW_GAME": {
-      // TODO: Same as RESET or optionally apply payload.settings for next setup
-      return getInitialState();
+      const settings = action.payload?.settings;
+      const players = state.players.map((p) => ({ ...p, strikes: 0, eliminated: false }));
+      const next: GameState = {
+        ...state,
+        phase: "active",
+        players,
+        currentPlayerIndex: 0,
+        guessedCountries: {},
+        lastGuessedCountryIso: undefined,
+        timerSeconds: settings?.timerEnabled ? settings.timerSeconds : state.timerSeconds,
+        timerRemaining:
+          settings?.timerEnabled ? settings.timerSeconds : state.timerSeconds,
+        strikesEnabled: settings?.strikesEnabled ?? state.strikesEnabled,
+        maxStrikes: settings?.maxStrikes ?? state.maxStrikes,
+      };
+      return next;
     }
+
     case "REHYDRATE": {
       return action.payload.state;
     }
+
     default: {
       const _: never = action;
       return state;
