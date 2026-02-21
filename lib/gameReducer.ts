@@ -10,6 +10,7 @@ import {
   nextPlayerIndex,
   countRemainingPlayers,
 } from "./gameLogic";
+import { resolveCountry } from "./countries";
 
 // --- Initial state ---
 
@@ -35,10 +36,7 @@ export function getInitialState(): GameState {
 
 export type GameAction =
   | { type: "START_GAME"; payload: { settings: GameSettings; players: Player[] } }
-  | {
-      type: "SUBMIT_GUESS";
-      payload: { isoCode: string; displayName: string; playerId: string };
-    }
+  | { type: "SUBMIT_GUESS"; payload: { rawGuess: string; timestamp: number } }
   | { type: "APPLY_STRIKE"; payload?: { playerId: string } }
   | { type: "ELIMINATE"; payload: { playerId: string } }
   | { type: "ADVANCE_TURN" }
@@ -97,6 +95,11 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         .map((p) => ({ ...p, name: p.name.trim(), strikes: 0, eliminated: false }));
       if (!canStartGame(trimmed)) return state;
       const players = ensurePlayerIds(trimmed);
+      // Hard mode: fewer strikes (override maxStrikes=1, strikes enabled)
+      const strikesEnabled =
+        settings.difficulty === "hard" ? true : settings.strikesEnabled;
+      const maxStrikes =
+        settings.difficulty === "hard" ? 1 : settings.maxStrikes;
       const next: GameState = {
         phase: "active",
         players,
@@ -104,15 +107,54 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         guessedCountries: {},
         timerSeconds: settings.timerEnabled ? settings.timerSeconds : undefined,
         timerRemaining: settings.timerEnabled ? settings.timerSeconds : undefined,
-        strikesEnabled: settings.strikesEnabled,
-        maxStrikes: settings.maxStrikes,
+        strikesEnabled,
+        maxStrikes,
       };
       return next;
     }
 
     case "SUBMIT_GUESS": {
-      // Country validation done elsewhere; just return state for now.
-      return state;
+      if (state.phase !== "active") return state;
+      const current = state.players[state.currentPlayerIndex];
+      if (!current) return state;
+
+      const { rawGuess, timestamp } = action.payload;
+      const resolved = resolveCountry(rawGuess);
+
+      if (resolved === null) {
+        // Invalid country name: strike (if enabled) then advance
+        if (state.strikesEnabled) {
+          const { nextState } = withStrike(state, current.id);
+          return advanceTurnState(nextState);
+        }
+        return advanceTurnState(state);
+      }
+
+      if (state.guessedCountries[resolved.isoCode]) {
+        // Already guessed: same as incorrect
+        if (state.strikesEnabled) {
+          const { nextState } = withStrike(state, current.id);
+          return advanceTurnState(nextState);
+        }
+        return advanceTurnState(state);
+      }
+
+      // Valid and new: add to guessedCountries, set lastGuessedCountryIso, advance turn
+      const guessedCountries: Record<string, GuessedCountry> = {
+        ...state.guessedCountries,
+        [resolved.isoCode]: {
+          isoCode: resolved.isoCode,
+          displayName: resolved.displayName,
+          guessedByPlayerId: current.id,
+          timestamp,
+        },
+      };
+      const afterGuess: GameState = {
+        ...state,
+        guessedCountries,
+        lastGuessedCountryIso: resolved.isoCode,
+      };
+      return advanceTurnState(afterGuess);
     }
 
     case "APPLY_STRIKE": {
@@ -165,6 +207,14 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
     case "NEW_GAME": {
       const settings = action.payload?.settings;
       const players = state.players.map((p) => ({ ...p, strikes: 0, eliminated: false }));
+      const strikesEnabled =
+        settings != null && settings.difficulty === "hard"
+          ? true
+          : (settings?.strikesEnabled ?? state.strikesEnabled);
+      const maxStrikes =
+        settings != null && settings.difficulty === "hard"
+          ? 1
+          : (settings?.maxStrikes ?? state.maxStrikes);
       const next: GameState = {
         ...state,
         phase: "active",
@@ -175,8 +225,8 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         timerSeconds: settings?.timerEnabled ? settings.timerSeconds : state.timerSeconds,
         timerRemaining:
           settings?.timerEnabled ? settings.timerSeconds : state.timerSeconds,
-        strikesEnabled: settings?.strikesEnabled ?? state.strikesEnabled,
-        maxStrikes: settings?.maxStrikes ?? state.maxStrikes,
+        strikesEnabled,
+        maxStrikes,
       };
       return next;
     }
