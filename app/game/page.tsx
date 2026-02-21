@@ -32,10 +32,12 @@ export default function GamePage() {
   // Timer effect
   useEffect(() => {
     if (state.phase !== "active" || !settings.timerEnabled) return;
-    
-    // If timer hits 0, dispatch timeout
+
+    // If timer hit 0, dispatch timeout once (then stop; don't re-fire while wrongGuessThisTurn)
     if (state.timerRemaining !== undefined && state.timerRemaining <= 0) {
-      dispatch({ type: "TIMER_TIMEOUT" });
+      if (!state.wrongGuessThisTurn) {
+        dispatch({ type: "TIMER_TIMEOUT" });
+      }
       return;
     }
 
@@ -44,7 +46,7 @@ export default function GamePage() {
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [state.phase, settings.timerEnabled, state.timerRemaining, dispatch]);
+  }, [state.phase, settings.timerEnabled, state.timerRemaining, state.wrongGuessThisTurn, dispatch]);
 
   // Focus input on turn change
   useEffect(() => {

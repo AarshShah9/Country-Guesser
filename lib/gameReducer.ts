@@ -198,7 +198,12 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         const { nextState } = withStrike(state, current.id);
         return advanceTurnState(nextState);
       }
-      return advanceTurnState(state);
+      // Strikes off: same as wrong guess — show warning, stop timer at 0, wait for skip
+      return {
+        ...state,
+        wrongGuessThisTurn: true,
+        timerRemaining: 0,
+      };
     }
 
     case "RESET": {
