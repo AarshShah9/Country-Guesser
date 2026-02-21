@@ -6,7 +6,7 @@ export default function GamePage() {
       <nav className="flex flex-wrap gap-3">
         <a
           href="/"
-          className="min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded-lg bg-foreground/10 px-4 py-2 font-medium transition-colors hover:bg-foreground/20"
+          className="min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded-lg bg-foreground/10 px-4 py-2 font-medium cursor-pointer transition-colors hover:bg-foreground/20"
         >
           Back to Setup
         </a>
