@@ -33,6 +33,8 @@ export interface GameState {
   timerSeconds?: number;
   strikesEnabled?: boolean;
   maxStrikes?: number;
+  /** When true, current player guessed wrong this turn (strikes off) and must skip to continue. */
+  wrongGuessThisTurn?: boolean;
   historyLog?: HistoryLogEntry[];
 }
 

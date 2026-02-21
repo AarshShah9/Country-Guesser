@@ -77,6 +77,7 @@ function advanceTurnState(state: GameState): GameState {
   const next: GameState = {
     ...state,
     currentPlayerIndex: nextIndex,
+    wrongGuessThisTurn: false,
   };
   if (state.timerSeconds != null) {
     next.timerRemaining = state.timerSeconds;
@@ -122,12 +123,12 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       const resolved = resolveCountry(rawGuess);
 
       if (resolved === null) {
-        // Invalid country name: strike (if enabled) then advance
+        // Invalid country name: strike (if enabled) then advance; else block retry until skip
         if (state.strikesEnabled) {
           const { nextState } = withStrike(state, current.id);
           return advanceTurnState(nextState);
         }
-        return advanceTurnState(state);
+        return { ...state, wrongGuessThisTurn: true };
       }
 
       if (state.guessedCountries[resolved.isoCode]) {
@@ -136,7 +137,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
           const { nextState } = withStrike(state, current.id);
           return advanceTurnState(nextState);
         }
-        return advanceTurnState(state);
+        return { ...state, wrongGuessThisTurn: true };
       }
 
       // Valid and new: add to guessedCountries, set lastGuessedCountryIso, advance turn

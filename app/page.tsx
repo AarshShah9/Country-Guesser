@@ -85,7 +85,7 @@ export default function SetupPage() {
           Country Guesser
         </h1>
         <p className="mt-2 text-[var(--muted)] text-sm sm:text-base">
-          Name countries. Take turns. Don’t get eliminated.
+          Name countries. Take turns. Don't get eliminated.
         </p>
       </header>
 
@@ -264,12 +264,6 @@ className={`min-h-[44px] px-4 rounded-xl font-medium cursor-pointer transition-c
         >
           Start game
         </button>
-        <Link
-          href="/game"
-          className="min-h-[44px] flex items-center justify-center rounded-xl border border-[var(--card-border)] px-4 py-2 font-medium text-foreground cursor-pointer transition-colors hover:bg-[var(--card)]"
-        >
-          Go to game (without starting)
-        </Link>
         <button
           type="button"
           onClick={handleResetAllData}

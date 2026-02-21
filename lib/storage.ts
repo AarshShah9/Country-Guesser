@@ -20,6 +20,17 @@ function isPlayerLike(v: unknown): v is Record<string, unknown> {
   );
 }
 
+function isGuessedCountryLike(v: unknown): v is Record<string, unknown> {
+  if (typeof v !== "object" || v === null) return false;
+  const g = v as Record<string, unknown>;
+  return (
+    typeof g.isoCode === "string" &&
+    typeof g.displayName === "string" &&
+    typeof g.guessedByPlayerId === "string" &&
+    typeof g.timestamp === "number"
+  );
+}
+
 function isGameStateShape(obj: unknown): obj is GameState {
   if (typeof obj !== "object" || obj === null) return false;
   const o = obj as Record<string, unknown>;
@@ -27,6 +38,10 @@ function isGameStateShape(obj: unknown): obj is GameState {
   if (!Array.isArray(o.players)) return false;
   if (typeof o.currentPlayerIndex !== "number") return false;
   if (typeof o.guessedCountries !== "object" || o.guessedCountries === null) return false;
+  const guessed = o.guessedCountries as Record<string, unknown>;
+  for (const key of Object.keys(guessed)) {
+    if (!isGuessedCountryLike(guessed[key])) return false;
+  }
   for (const p of o.players as unknown[]) {
     if (!isPlayerLike(p)) return false;
     const q = p as Record<string, unknown>;
